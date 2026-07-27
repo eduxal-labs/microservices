@@ -72,3 +72,12 @@ jobs:
             --no-fail-on-empty-changeset \
             --stack-name eduxal-microservices \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+
+      - name: Sync Cloudflare DNS Automatically
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          DOMAIN_NAME: auth.eduxal.com
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        run: |
+          python3 .github/scripts/sync_cloudflare_dns.py
