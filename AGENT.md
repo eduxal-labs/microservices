@@ -56,11 +56,19 @@ This file serves as the single source of truth for AI agents working in this rep
 
 ### Error Handling & Types
 - **Unified Error Enum**: Prefer a centralized `Error` enum in `types::error` (`shared/common/src/types/error.rs`) over micro-enums per struct.
-- **Feature-Gated Error Variants**: Use `#[cfg(feature = "...")]` on specific variants inside the central `Error` enum when they depend on optional features.
+- **Feature-Gated Error Variant Scope**:
+  - Use `#[cfg(feature = "...")]` on specific variants inside `Error` when they depend on optional feature crates (e.g., `InvalidAttributeValue` for DynamoDB).
+  - **CRITICAL**: Do NOT use feature-gated error variants in non-feature-gated code or trait implementations (e.g., `FromStr for Status`). Non-feature-gated methods MUST return dedicated, always-available variants (e.g., `Error::InvalidUserStatus`).
+  - Reserve feature-gated error variants strictly for implementations inside feature-gated blocks (e.g., `#[cfg(feature = "dynamodb")] mod dynamodb_impl`).
+- **Domain-Specific Error Variants**: Prefer specific, descriptive error variants (e.g., `InvalidUserStatus`, `InvalidPhone`, `InvalidDateTime`) over generic database errors when parsing domain enums and structs.
 - **Error Conversions**: Implement `From` traits on `Error` (e.g., `From<bson::oid::Error> for Error`) so `FromStr` and `TryFrom` can return `Result<T, Error>` directly without ad-hoc closures.
 
 ### Code Style & Formatting
 - **Trait Errors**: `FromStr` and `TryFrom` trait implementations should set `type Err = Error;` for consistent error handling across domain types.
+- **Multi-Feature Compilation Verification**: Always verify builds using:
+  1. `cargo check -p common` (verifies default feature compilation without optional feature leaks).
+  2. `cargo check -p common -F test` (verifies all optional features compile together).
+  3. `cargo test -p common -F test` (runs all unit tests across all features).
 
 ### AWS SAM & Infrastructure
 - *(No custom rules recorded yet)*

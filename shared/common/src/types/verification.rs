@@ -1,4 +1,4 @@
-use super::{DateTime, Error, Phone};
+use super::{DateTime, Phone};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +23,7 @@ impl Verification {
 #[cfg(feature = "dynamodb")]
 mod dynamodb_impl {
     use super::*;
+    use crate::types::Error;
     use aws_sdk_dynamodb::types::AttributeValue;
     use std::collections::HashMap;
 

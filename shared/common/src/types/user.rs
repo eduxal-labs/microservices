@@ -13,7 +13,13 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(id: Id, phone: Phone, name: impl Into<String>, status: Status, created: DateTime) -> Self {
+    pub fn new(
+        id: Id,
+        phone: Phone,
+        name: impl Into<String>,
+        status: Status,
+        created: DateTime,
+    ) -> Self {
         Self {
             id,
             phone,
@@ -25,7 +31,10 @@ impl User {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "diesel", derive(diesel::expression::AsExpression, diesel::deserialize::FromSqlRow))]
+#[cfg_attr(
+    feature = "diesel",
+    derive(diesel::expression::AsExpression, diesel::deserialize::FromSqlRow)
+)]
 #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
 pub enum Status {
     Active,
@@ -60,7 +69,7 @@ impl FromStr for Status {
             "Invited" => Ok(Status::Invited),
             "Suspended" => Ok(Status::Suspended),
             "Deleted" => Ok(Status::Deleted),
-            _ => Err(Error::InvalidAttributeValue),
+            _ => Err(Error::InvalidUserStatus),
         }
     }
 }
@@ -80,7 +89,9 @@ mod diesel_impl {
     }
 
     impl FromSql<Text, Sqlite> for Status {
-        fn from_sql(bytes: <Sqlite as ::diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        fn from_sql(
+            bytes: <Sqlite as ::diesel::backend::Backend>::RawValue<'_>,
+        ) -> deserialize::Result<Self> {
             let s = <String as FromSql<Text, Sqlite>>::from_sql(bytes)?;
             Status::from_str(&s).map_err(|e| e.into())
         }
@@ -154,8 +165,8 @@ mod tests {
     #[test]
     fn test_sqlite_status_conversion() {
         use ::diesel::prelude::*;
-        use ::diesel::sqlite::SqliteConnection;
         use ::diesel::sql_types::Text;
+        use ::diesel::sqlite::SqliteConnection;
         use ::diesel::QueryableByName;
 
         let mut conn = SqliteConnection::establish(":memory:").unwrap();

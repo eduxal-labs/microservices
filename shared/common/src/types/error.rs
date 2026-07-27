@@ -12,6 +12,9 @@ pub enum Error {
     #[cfg(feature = "dynamodb")]
     #[error("invalid dynamodb attribute type")]
     InvalidAttributeValue,
+
+    #[error("invalid user status")]
+    InvalidUserStatus,
 }
 
 impl From<bson::oid::Error> for Error {
