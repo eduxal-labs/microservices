@@ -11,7 +11,13 @@ const OUTPUT_LEN: usize = 32;
 #[proc_macro]
 pub fn key(input: TokenStream) -> TokenStream {
     let input_str = parse_macro_input!(input as syn::LitStr).value();
-    let value = std::env::var(&input_str).unwrap_or_else(|_| input_str.clone());
+    let value = match std::env::var(&input_str) {
+        Ok(v) => v,
+        Err(_) => {
+            let msg = format!("Environment variable '{}' is required at compile time", input_str);
+            return quote! { compile_error!(#msg) }.into();
+        }
+    };
     let pwd = value.as_bytes();
     let salt = b"PASETO_KEY_PASSWORD";
     let argon2 = argon2();

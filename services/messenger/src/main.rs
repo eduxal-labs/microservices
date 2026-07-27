@@ -24,7 +24,7 @@ pub struct Messenger {
 
 impl Messenger {
     pub async fn new() -> Self {
-        let token = option_env!("WHATSAPP_TOKEN").unwrap_or("WHATSAPP_TOKEN_MISSING");
+        let token = env!("WHATSAPP_TOKEN");
         let client = Client::builder()
             .tcp_keepalive(std::time::Duration::from_secs(60))
             .pool_max_idle_per_host(80)
