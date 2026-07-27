@@ -1,9 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    # Add service and shared crates here when created, e.g.:
-    # "services/auth-service",
-    # "shared/common",
+    "services/authentication",
+    "shared/common",
 ]
 
 [workspace.package]

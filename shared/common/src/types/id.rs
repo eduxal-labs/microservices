@@ -15,7 +15,7 @@ impl Id {
         Self(ObjectId::from_bytes(bytes))
     }
 
-    pub fn as_bytes(&self) -> &[u8; 12] {
+    pub fn bytes(&self) -> [u8; 12] {
         self.0.bytes()
     }
 
@@ -111,7 +111,8 @@ mod diesel_impl {
         [u8]: ToSql<Binary, DB>,
     {
         fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
-            self.as_bytes().as_slice().to_sql(out)
+            let bytes = self.bytes();
+            <[u8] as ToSql<Binary, DB>>::to_sql(&bytes, out)
         }
     }
 
@@ -137,7 +138,7 @@ pub mod dynamodb_impl {
     use super::*;
     use aws_sdk_dynamodb::types::AttributeValue;
 
-    #[derive(Debug, PartialEq, Eq, thiserror::Error)]
+    #[derive(Debug, thiserror::Error)]
     pub enum IdParseError {
         #[error("Invalid AttributeValue type, expected String AttributeValue::S")]
         InvalidAttributeType,
@@ -189,7 +190,7 @@ mod tests {
 
         let parsed = Id::from_str(&hex).expect("Should parse valid hex string");
         assert_eq!(id, parsed);
-        assert_eq!(id.as_bytes(), parsed.as_bytes());
+        assert_eq!(id.bytes(), parsed.bytes());
     }
 
     #[test]
