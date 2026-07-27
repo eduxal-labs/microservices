@@ -4,6 +4,12 @@ Description: >
   eduxal
   Multi-service AWS SAM application for Eduxal with ARM architecture, HTTP API Gateway, DynamoDB tables, and SQS Messenger Queue.
 
+Parameters:
+  DomainName:
+    Type: String
+    Default: auth.eduxal.com
+    Description: Custom domain name for the HTTP API Gateway
+
 Globals:
   Function:
     Timeout: 10
@@ -16,6 +22,15 @@ Globals:
         RUST_LOG: info
 
 Resources:
+  # ============================================================================
+  # ACM Certificate for Custom Domain (auth.eduxal.com)
+  # ============================================================================
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+
   # ============================================================================
   # HTTP API Gateway
   # ============================================================================
@@ -30,6 +45,10 @@ Resources:
           - "*"
         AllowMethods:
           - "*"
+      Domain:
+        DomainName: !Ref DomainName
+        CertificateArn: !Ref ApiCertificate
+        EndpointConfiguration: REGIONAL
 
   # ============================================================================
   # SQS Queue
@@ -163,6 +182,9 @@ Outputs:
   HttpApiUrl:
     Description: "HTTP API Gateway endpoint URL"
     Value: !Sub "https://${EduxalHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  CustomDomainUrl:
+    Description: "Custom Domain URL"
+    Value: !Sub "https://${DomainName}"
   UsersTableName:
     Description: "Users DynamoDB Table Name"
     Value: !Ref UsersTable
