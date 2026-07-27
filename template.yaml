@@ -81,6 +81,25 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eduxal-sessions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user
+          KeyType: HASH
+        - AttributeName: id
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires
+        Enabled: true
+
   # ============================================================================
   # Lambda Functions
   # ============================================================================
@@ -94,6 +113,7 @@ Resources:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
           VERIFICATIONS_TABLE_NAME: !Ref VerificationsTable
+          SESSIONS_TABLE_NAME: !Ref SessionsTable
           MESSENGER_QUEUE_URL: !Ref MessengerQueue
       Events:
         ApiAuth:
@@ -107,6 +127,8 @@ Resources:
             TableName: !Ref UsersTable
         - DynamoDBCrudPolicy:
             TableName: !Ref VerificationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SessionsTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt MessengerQueue.QueueName
     Metadata:
@@ -147,6 +169,9 @@ Outputs:
   VerificationsTableName:
     Description: "Verifications DynamoDB Table Name"
     Value: !Ref VerificationsTable
+  SessionsTableName:
+    Description: "Sessions DynamoDB Table Name"
+    Value: !Ref SessionsTable
   MessengerQueueUrl:
     Description: "Messenger SQS Queue URL"
     Value: !Ref MessengerQueue
