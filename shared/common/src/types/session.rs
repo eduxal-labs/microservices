@@ -17,30 +17,33 @@ pub struct Session {
     #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
     pub created: DateTime,
     #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
+    pub expires: DateTime,
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
     pub ttl: DateTime,
 }
 
 impl Session {
-    pub fn new(
-        user: Id,
-        id: Id,
-        device: impl Into<String>,
-        status: SessionStatus,
-        created: DateTime,
-        ttl: DateTime,
-    ) -> Self {
+    pub const TTL: chrono::Duration = chrono::Duration::days(31);
+
+    pub fn new(user: Id, device: impl Into<String>) -> Self {
+        let id = Id::new();
+        let status = SessionStatus::Active;
+        let created = DateTime::now();
+        let expires = created + Self::TTL;
+        let ttl = created + Self::TTL * 3;
         Self {
             user,
             id,
             device: device.into(),
             status,
             created,
+            expires,
             ttl,
         }
     }
 
     pub fn is_expired(&self) -> bool {
-        self.status == SessionStatus::Expired || self.ttl.timestamp() <= DateTime::now().timestamp()
+        self.expires.timestamp() <= DateTime::now().timestamp()
     }
 }
 
@@ -53,7 +56,6 @@ impl Session {
 pub enum SessionStatus {
     Active,
     Revoked,
-    Expired,
 }
 
 impl SessionStatus {
@@ -61,7 +63,6 @@ impl SessionStatus {
         match self {
             SessionStatus::Active => "Active",
             SessionStatus::Revoked => "Revoked",
-            SessionStatus::Expired => "Expired",
         }
     }
 }
@@ -79,7 +80,6 @@ impl FromStr for SessionStatus {
         match s {
             "Active" => Ok(SessionStatus::Active),
             "Revoked" => Ok(SessionStatus::Revoked),
-            "Expired" => Ok(SessionStatus::Expired),
             _ => Err(Error::InvalidSessionStatus),
         }
     }
@@ -154,6 +154,7 @@ mod dynamodb_impl {
             map.insert("device".to_string(), AttributeValue::S(s.device.clone()));
             map.insert("status".to_string(), AttributeValue::from(&s.status));
             map.insert("created".to_string(), AttributeValue::from(&s.created));
+            map.insert("expires".to_string(), AttributeValue::from(&s.expires));
             map.insert(
                 "ttl".to_string(),
                 AttributeValue::N(s.ttl.timestamp().to_string()),
@@ -171,6 +172,7 @@ mod dynamodb_impl {
             let device_attr = map.get("device").ok_or(Error::InvalidAttributeValue)?;
             let status_attr = map.get("status").ok_or(Error::InvalidAttributeValue)?;
             let created_attr = map.get("created").ok_or(Error::InvalidAttributeValue)?;
+            let expires_attr = map.get("expires").ok_or(Error::InvalidAttributeValue)?;
             let ttl_attr = map.get("ttl").ok_or(Error::InvalidAttributeValue)?;
 
             let user = Id::try_from(user_attr)?;
@@ -181,6 +183,7 @@ mod dynamodb_impl {
                 .clone();
             let status = SessionStatus::try_from(status_attr)?;
             let created = DateTime::try_from(created_attr)?;
+            let expires = DateTime::try_from(expires_attr)?;
             let ttl = DateTime::try_from(ttl_attr)?;
 
             Ok(Session {
@@ -189,6 +192,7 @@ mod dynamodb_impl {
                 device,
                 status,
                 created,
+                expires,
                 ttl,
             })
         }
@@ -201,25 +205,21 @@ mod tests {
 
     #[test]
     fn test_session_status_str_conversion() {
-        assert_eq!(SessionStatus::from_str("Active").unwrap(), SessionStatus::Active);
-        assert_eq!(SessionStatus::from_str("Revoked").unwrap(), SessionStatus::Revoked);
-        assert_eq!(SessionStatus::from_str("Expired").unwrap(), SessionStatus::Expired);
+        assert_eq!(
+            SessionStatus::from_str("Active").unwrap(),
+            SessionStatus::Active
+        );
+        assert_eq!(
+            SessionStatus::from_str("Revoked").unwrap(),
+            SessionStatus::Revoked
+        );
         assert_eq!(SessionStatus::Active.as_str(), "Active");
         assert!(SessionStatus::from_str("Unknown").is_err());
     }
 
     #[test]
     fn test_session_serde() {
-        let now = DateTime::now();
-        let ttl = DateTime::from_timestamp(now.timestamp() + 3600, 0).unwrap();
-        let session = Session::new(
-            Id::new(),
-            Id::new(),
-            "Mozilla/5.0",
-            SessionStatus::Active,
-            now,
-            ttl,
-        );
+        let session = Session::new(Id::new(), "Mozilla/5.0");
 
         let json = serde_json::to_string(&session).unwrap();
         let deserialized: Session = serde_json::from_str(&json).unwrap();
@@ -234,25 +234,17 @@ mod tests {
         use ::diesel::sqlite::SqliteConnection;
 
         let mut conn = SqliteConnection::establish(":memory:").unwrap();
-        let now = DateTime::now();
-        let ttl = DateTime::from_timestamp(now.timestamp() + 3600, 0).unwrap();
-        let session = Session::new(
-            Id::new(),
-            Id::new(),
-            "EduxalClient/1.0",
-            SessionStatus::Active,
-            now,
-            ttl,
-        );
+        let session = Session::new(Id::new(), "EduxalClient/1.0");
 
         let result = ::diesel::sql_query(
-            "SELECT ? as user, ? as id, ? as device, ? as status, ? as created, ? as ttl",
+            "SELECT ? as user, ? as id, ? as device, ? as status, ? as created, ? as expires, ? as ttl",
         )
         .bind::<Binary, _>(&session.user)
         .bind::<Binary, _>(&session.id)
         .bind::<Text, _>(&session.device)
         .bind::<Text, _>(&session.status)
         .bind::<Text, _>(&session.created)
+        .bind::<Text, _>(&session.expires)
         .bind::<Text, _>(&session.ttl)
         .get_result::<Session>(&mut conn)
         .unwrap();
@@ -266,16 +258,7 @@ mod tests {
         use aws_sdk_dynamodb::types::AttributeValue;
         use std::collections::HashMap;
 
-        let now = DateTime::now();
-        let ttl = DateTime::from_timestamp(now.timestamp() + 3600, 0).unwrap();
-        let session = Session::new(
-            Id::new(),
-            Id::new(),
-            "PostmanRuntime/7.29.2",
-            SessionStatus::Active,
-            now,
-            ttl,
-        );
+        let session = Session::new(Id::new(), "PostmanRuntime/7.29.2");
 
         let item: HashMap<String, AttributeValue> = (&session).into();
         assert_eq!(
@@ -286,7 +269,10 @@ mod tests {
             item.get("id").unwrap().as_s().unwrap(),
             &session.id.to_hex()
         );
-        assert_eq!(item.get("device").unwrap().as_s().unwrap(), "PostmanRuntime/7.29.2");
+        assert_eq!(
+            item.get("device").unwrap().as_s().unwrap(),
+            "PostmanRuntime/7.29.2"
+        );
         assert_eq!(item.get("status").unwrap().as_s().unwrap(), "Active");
 
         let parsed = Session::try_from(&item).unwrap();
@@ -295,6 +281,7 @@ mod tests {
         assert_eq!(session.device, parsed.device);
         assert_eq!(session.status, parsed.status);
         assert_eq!(session.created.timestamp(), parsed.created.timestamp());
+        assert_eq!(session.expires.timestamp(), parsed.expires.timestamp());
         assert_eq!(session.ttl.timestamp(), parsed.ttl.timestamp());
     }
 }

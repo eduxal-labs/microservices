@@ -55,6 +55,9 @@ This file serves as the single source of truth for AI agents working in this rep
     - `cargo test -p common -F test` (or `cargo test --all-features`) so that all feature-gated unit tests run and pass.
 - **Modular Directory Organization**: Group complex domain modules (such as `token`) into sub-directories (`types/token/`) with focused, single-responsibility files (`access.rs`, `refresh.rs`, `setup.rs`, `traits.rs`, `raw.rs`, `token.rs`, `tests.rs`).
 - **Typestate Token & Embedded Serde Validation**: Implement typestate tokens (`Token<T>`) where `T` defines claims and `TokenType` trait defines `KIND` and default `TTL`. Perform automatic token type validation and expiration checks directly within Serde `Deserialize` and PASETO decoding (`encode_paseto`/`decode_paseto`).
+- **Dual Expiration Model (Access Expiry vs. Storage TTL)**: Session and credential models maintain both an active access expiration (`expires`, e.g., 31 days) and an extended retention TTL (`ttl`, e.g., 93 days) used for database auto-deletion (DynamoDB TTL).
+- **Minimal Convenience Constructors**: Provide ergonomic constructors (e.g., `Session::new(user, device)`) that encapsulate key generation (`Id::new()`), default initial status (`SessionStatus::Active`), and relative timestamp offsets (`created`, `expires`, `ttl`).
+- **Domain Status Enum Pattern**: Status enums (`SessionStatus`, `Status`) implement `as_str()`, `Display`, `FromStr` (with dedicated error variants like `Error::InvalidSessionStatus`), Diesel `ToSql`/`FromSql` (for `Text`/`Sqlite`), and DynamoDB `AttributeValue` conversions.
 
 ### Error Handling & Types
 - **Unified Error Enum**: Prefer a centralized `Error` enum in `types::error` (`shared/common/src/types/error.rs`) over micro-enums per struct.
