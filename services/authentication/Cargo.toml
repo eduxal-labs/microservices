@@ -5,11 +5,16 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-common = { path = "../../shared/common" }
-lambda_runtime = { workspace = true }
-aws_lambda_events = { workspace = true }
+common = { path = "../../shared/common", features = ["dynamodb", "token"] }
+lambda_http = "1.1"
+aws-config = { version = "1.8", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.60"
+aws-sdk-sqs = "1.50"
+axum = { version = "0.8", features = ["macros"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+chrono = { version = "0.4.45", features = ["serde"] }
+rand = "0.8"
