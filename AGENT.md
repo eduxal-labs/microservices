@@ -48,10 +48,12 @@ This file serves as the single source of truth for AI agents working in this rep
 - *(No custom rules recorded yet)*
 
 ### Error Handling & Types
-- *(No custom rules recorded yet)*
+- **Unified Error Enum**: Prefer a centralized `Error` enum in `types::error` (`shared/common/src/types/error.rs`) over micro-enums per struct.
+- **Feature-Gated Error Variants**: Use `#[cfg(feature = "...")]` on specific variants inside the central `Error` enum when they depend on optional features.
+- **Error Conversions**: Implement `From` traits on `Error` (e.g., `From<bson::oid::Error> for Error`) so `FromStr` and `TryFrom` can return `Result<T, Error>` directly without ad-hoc closures.
 
 ### Code Style & Formatting
-- *(No custom rules recorded yet)*
+- **Trait Errors**: `FromStr` and `TryFrom` trait implementations should set `type Err = Error;` for consistent error handling across domain types.
 
 ### AWS SAM & Infrastructure
 - *(No custom rules recorded yet)*

@@ -103,7 +103,7 @@ impl<'de> Deserialize<'de> for Id {
 }
 
 #[cfg(feature = "diesel")]
-mod diesel_impl {
+mod diesel {
     use super::*;
     use ::diesel::backend::Backend;
     use ::diesel::deserialize::{self, FromSql};
@@ -142,14 +142,6 @@ pub mod dynamodb {
     use super::*;
     use aws_sdk_dynamodb::types::AttributeValue;
 
-    #[derive(Debug, thiserror::Error)]
-    pub enum IdParseError {
-        #[error("Invalid AttributeValue type, expected String AttributeValue::S")]
-        InvalidAttributeType,
-        #[error("Invalid ObjectId string format: {0}")]
-        InvalidFormat(#[from] super::Error),
-    }
-
     impl From<Id> for AttributeValue {
         fn from(id: Id) -> Self {
             AttributeValue::S(id.to_hex())
@@ -163,18 +155,18 @@ pub mod dynamodb {
     }
 
     impl TryFrom<&AttributeValue> for Id {
-        type Error = IdParseError;
+        type Error = Error;
 
         fn try_from(value: &AttributeValue) -> Result<Self, Self::Error> {
             match value {
-                AttributeValue::S(s) => Id::from_str(s).map_err(IdParseError::InvalidFormat),
-                _ => Err(IdParseError::InvalidAttributeType),
+                AttributeValue::S(s) => Id::from_str(s),
+                _ => Err(Error::InvalidAttributeValue),
             }
         }
     }
 
     impl TryFrom<AttributeValue> for Id {
-        type Error = IdParseError;
+        type Error = Error;
 
         fn try_from(value: AttributeValue) -> Result<Self, Self::Error> {
             Self::try_from(&value)
