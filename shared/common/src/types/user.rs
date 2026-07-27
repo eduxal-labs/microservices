@@ -102,6 +102,7 @@ mod diesel_impl {
 mod dynamodb_impl {
     use super::*;
     use aws_sdk_dynamodb::types::AttributeValue;
+    use std::collections::HashMap;
 
     impl From<Status> for AttributeValue {
         fn from(status: Status) -> Self {
@@ -131,6 +132,47 @@ mod dynamodb_impl {
 
         fn try_from(value: AttributeValue) -> Result<Self, Self::Error> {
             Self::try_from(&value)
+        }
+    }
+
+    impl From<&User> for HashMap<String, AttributeValue> {
+        fn from(u: &User) -> Self {
+            let mut map = HashMap::new();
+            map.insert("id".to_string(), AttributeValue::from(&u.id));
+            map.insert("phone".to_string(), AttributeValue::from(&u.phone));
+            map.insert("name".to_string(), AttributeValue::S(u.name.clone()));
+            map.insert("status".to_string(), AttributeValue::from(&u.status));
+            map.insert("created".to_string(), AttributeValue::from(&u.created));
+            map
+        }
+    }
+
+    impl TryFrom<&HashMap<String, AttributeValue>> for User {
+        type Error = Error;
+
+        fn try_from(map: &HashMap<String, AttributeValue>) -> Result<Self, Self::Error> {
+            let id_attr = map.get("id").ok_or(Error::InvalidAttributeValue)?;
+            let phone_attr = map.get("phone").ok_or(Error::InvalidAttributeValue)?;
+            let name_attr = map.get("name").ok_or(Error::InvalidAttributeValue)?;
+            let status_attr = map.get("status").ok_or(Error::InvalidAttributeValue)?;
+            let created_attr = map.get("created").ok_or(Error::InvalidAttributeValue)?;
+
+            let id = Id::try_from(id_attr)?;
+            let phone = Phone::try_from(phone_attr)?;
+            let name = name_attr
+                .as_s()
+                .map_err(|_| Error::InvalidAttributeValue)?
+                .clone();
+            let status = Status::try_from(status_attr)?;
+            let created = DateTime::try_from(created_attr)?;
+
+            Ok(User {
+                id,
+                phone,
+                name,
+                status,
+                created,
+            })
         }
     }
 }
@@ -200,5 +242,20 @@ mod tests {
 
         let invalid_attr = AttributeValue::S("InvalidStatus".to_string());
         assert!(Status::try_from(&invalid_attr).is_err());
+
+        let user = User::new(
+            Id::new(),
+            Phone::new("+254712345678").unwrap(),
+            "John Doe",
+            Status::Active,
+            DateTime::now(),
+        );
+
+        let item: std::collections::HashMap<String, AttributeValue> = (&user).into();
+        let parsed_user = User::try_from(&item).unwrap();
+        assert_eq!(user.id, parsed_user.id);
+        assert_eq!(user.phone, parsed_user.phone);
+        assert_eq!(user.name, parsed_user.name);
+        assert_eq!(user.status, parsed_user.status);
     }
 }

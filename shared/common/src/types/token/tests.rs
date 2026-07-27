@@ -103,12 +103,17 @@ fn test_bundle_serialization_and_deserialization() {
 
     let access_token = Token::access(session_id.clone(), user_id.clone());
     let refresh_token = Token::refresh(session_id.clone(), user_id.clone());
-    let bundle = Bundle::new(access_token.clone(), refresh_token.clone());
+    let bundle = Bundle::new(
+        access_token.clone(),
+        refresh_token.clone(),
+        "https://r2.eduxal.com/profiles/user123.jpg",
+    );
 
     // Serialize bundle to JSON
     let bundle_json = serde_json::to_string(&bundle).unwrap();
     assert!(bundle_json.contains("\"access\":\"v4.local."));
     assert!(bundle_json.contains("\"refresh\":\"v4.local."));
+    assert!(bundle_json.contains("\"profile\":\"https://r2.eduxal.com/profiles/user123.jpg\""));
 
     // Deserialize bundle back from JSON
     let deserialized_bundle: Bundle = serde_json::from_str(&bundle_json).unwrap();

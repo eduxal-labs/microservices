@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verification {
     pub phone: Phone,
+    #[serde(skip_serializing, default)]
     pub code: String,
     pub created: DateTime,
     pub ttl: DateTime,
@@ -33,7 +34,10 @@ mod dynamodb_impl {
             map.insert("phone".to_string(), AttributeValue::from(&v.phone));
             map.insert("code".to_string(), AttributeValue::S(v.code.clone()));
             map.insert("created".to_string(), AttributeValue::from(&v.created));
-            map.insert("ttl".to_string(), AttributeValue::N(v.ttl.timestamp().to_string()));
+            map.insert(
+                "ttl".to_string(),
+                AttributeValue::N(v.ttl.timestamp().to_string()),
+            );
             map
         }
     }
@@ -48,7 +52,10 @@ mod dynamodb_impl {
             let ttl_attr = map.get("ttl").ok_or(Error::InvalidAttributeValue)?;
 
             let phone = Phone::try_from(phone_attr)?;
-            let code = code_attr.as_s().map_err(|_| Error::InvalidAttributeValue)?.clone();
+            let code = code_attr
+                .as_s()
+                .map_err(|_| Error::InvalidAttributeValue)?
+                .clone();
             let created = DateTime::try_from(created_attr)?;
             let ttl = DateTime::try_from(ttl_attr)?;
 
@@ -70,16 +77,17 @@ mod tests {
     fn test_verification_serde() {
         let now = DateTime::now();
         let ttl = DateTime::from_timestamp(now.timestamp() + 300, 0).unwrap();
-        let verification = Verification::new(
-            Phone::new("+254712345678").unwrap(),
-            "123456",
-            now,
-            ttl,
-        );
+        let verification =
+            Verification::new(Phone::new("+254712345678").unwrap(), "123456", now, ttl);
 
         let json = serde_json::to_string(&verification).unwrap();
+        assert!(!json.contains("code"));
+
         let deserialized: Verification = serde_json::from_str(&json).unwrap();
-        assert_eq!(verification, deserialized);
+        assert_eq!(verification.phone, deserialized.phone);
+        assert_eq!(deserialized.code, "");
+        assert_eq!(verification.created.timestamp(), deserialized.created.timestamp());
+        assert_eq!(verification.ttl.timestamp(), deserialized.ttl.timestamp());
     }
 
     #[cfg(feature = "dynamodb")]
@@ -90,12 +98,8 @@ mod tests {
 
         let now = DateTime::now();
         let ttl = DateTime::from_timestamp(now.timestamp() + 300, 0).unwrap();
-        let verification = Verification::new(
-            Phone::new("+254712345678").unwrap(),
-            "123456",
-            now,
-            ttl,
-        );
+        let verification =
+            Verification::new(Phone::new("+254712345678").unwrap(), "123456", now, ttl);
 
         let item: HashMap<String, AttributeValue> = (&verification).into();
         let parsed = Verification::try_from(&item).unwrap();

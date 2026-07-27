@@ -1,10 +1,11 @@
-use crate::types::{token::traits::TokenType, Phone};
+use crate::types::{token::traits::TokenType, Id, Phone};
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 
 /// Setup token payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Setup {
+    pub id: Id,
     pub phone: Phone,
 }
 

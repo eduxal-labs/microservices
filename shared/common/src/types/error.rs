@@ -19,6 +19,8 @@ pub enum Error {
     UnAuthorized,
     #[error("forbidden")]
     Forbidden,
+    #[error("slow down")]
+    SlowDown,
 }
 
 impl From<bson::oid::Error> for Error {

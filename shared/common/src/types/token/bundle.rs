@@ -8,11 +8,16 @@ use std::fmt;
 pub struct Bundle {
     pub access: Token<Access>,
     pub refresh: Token<Refresh>,
+    pub profile: String,
 }
 
 impl Bundle {
-    pub fn new(access: Token<Access>, refresh: Token<Refresh>) -> Self {
-        Self { access, refresh }
+    pub fn new(access: Token<Access>, refresh: Token<Refresh>, profile: impl Into<String>) -> Self {
+        Self {
+            access,
+            refresh,
+            profile: profile.into(),
+        }
     }
 }
 
@@ -30,9 +35,10 @@ impl Serialize for Bundle {
             .tokenize()
             .map_err(|_| serde::ser::Error::custom("failed to tokenize refresh token"))?;
 
-        let mut state = serializer.serialize_struct("Bundle", 2)?;
+        let mut state = serializer.serialize_struct("Bundle", 3)?;
         state.serialize_field("access", &access_str)?;
         state.serialize_field("refresh", &refresh_str)?;
+        state.serialize_field("profile", &self.profile)?;
         state.end()
     }
 }
@@ -45,6 +51,7 @@ impl<'de> Deserialize<'de> for Bundle {
         enum Field {
             Access,
             Refresh,
+            Profile,
         }
 
         impl<'de> Deserialize<'de> for Field {
@@ -58,7 +65,7 @@ impl<'de> Deserialize<'de> for Bundle {
                     type Value = Field;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("`access` or `refresh`")
+                        formatter.write_str("`access`, `refresh` or `profile`")
                     }
 
                     fn visit_str<E>(self, value: &str) -> Result<Field, E>
@@ -68,7 +75,11 @@ impl<'de> Deserialize<'de> for Bundle {
                         match value {
                             "access" => Ok(Field::Access),
                             "refresh" => Ok(Field::Refresh),
-                            _ => Err(de::Error::unknown_field(value, &["access", "refresh"])),
+                            "profile" => Ok(Field::Profile),
+                            _ => Err(de::Error::unknown_field(
+                                value,
+                                &["access", "refresh", "profile"],
+                            )),
                         }
                     }
                 }
@@ -92,6 +103,7 @@ impl<'de> Deserialize<'de> for Bundle {
             {
                 let mut access: Option<Token<Access>> = None;
                 let mut refresh: Option<Token<Refresh>> = None;
+                let mut profile: Option<String> = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -107,17 +119,28 @@ impl<'de> Deserialize<'de> for Bundle {
                             }
                             refresh = Some(map.next_value()?);
                         }
+                        Field::Profile => {
+                            if profile.is_some() {
+                                return Err(de::Error::duplicate_field("profile"));
+                            }
+                            profile = Some(map.next_value()?);
+                        }
                     }
                 }
 
                 let access = access.ok_or_else(|| de::Error::missing_field("access"))?;
                 let refresh = refresh.ok_or_else(|| de::Error::missing_field("refresh"))?;
+                let profile = profile.ok_or_else(|| de::Error::missing_field("profile"))?;
 
-                Ok(Bundle { access, refresh })
+                Ok(Bundle {
+                    access,
+                    refresh,
+                    profile,
+                })
             }
         }
 
-        const FIELDS: &[&str] = &["access", "refresh"];
+        const FIELDS: &[&str] = &["access", "refresh", "profile"];
         deserializer.deserialize_struct("Bundle", FIELDS, BundleVisitor)
     }
 }

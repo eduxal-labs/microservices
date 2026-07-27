@@ -125,7 +125,8 @@ impl Token<Refresh> {
 
 impl Token<Setup> {
     pub fn setup(phone: Phone) -> Self {
-        Self::new(Setup { phone })
+        let id = Id::new();
+        Self::new(Setup { id, phone })
     }
 }
 

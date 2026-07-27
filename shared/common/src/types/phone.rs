@@ -35,6 +35,12 @@ impl Phone {
     }
 }
 
+impl AsRef<str> for Phone {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl FromStr for Phone {
     type Err = Error;
 
