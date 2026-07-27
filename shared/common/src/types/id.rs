@@ -19,6 +19,10 @@ impl Id {
         self.0.bytes()
     }
 
+    pub fn as_bytes_ref(&self) -> &[u8; 12] {
+        unsafe { &*(self as *const Id as *const [u8; 12]) }
+    }
+
     pub fn to_hex(&self) -> String {
         self.0.to_hex()
     }
@@ -111,8 +115,7 @@ mod diesel_impl {
         [u8]: ToSql<Binary, DB>,
     {
         fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
-            let bytes = self.bytes();
-            <[u8] as ToSql<Binary, DB>>::to_sql(&bytes, out)
+            <[u8] as ToSql<Binary, DB>>::to_sql(self.as_bytes_ref(), out)
         }
     }
 
