@@ -126,7 +126,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: eduxal-authentication
-      CodeUri: ./services/authentication
+      CodeUri: target/lambda/authentication
       Handler: bootstrap
       Environment:
         Variables:
@@ -150,14 +150,12 @@ Resources:
             TableName: !Ref SessionsTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt MessengerQueue.QueueName
-    Metadata:
-      BuildMethod: cargo-lambda
 
   MessengerFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: eduxal-messenger
-      CodeUri: ./services/messenger
+      CodeUri: target/lambda/messenger
       Handler: bootstrap
       ReservedConcurrentExecutions: 1
       Environment:
@@ -175,8 +173,6 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref VerificationsTable
-    Metadata:
-      BuildMethod: cargo-lambda
 
 Outputs:
   HttpApiUrl:

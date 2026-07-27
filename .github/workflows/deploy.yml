@@ -70,11 +70,11 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: SAM Build
+      - name: Build Binaries with Cargo Lambda
         env:
           PASETO_PASSWORD: ${{ secrets.PASETO_PASSWORD }}
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
-        run: sam build
+        run: cargo lambda build --release --arm64
 
       - name: SAM Deploy
         run: |
