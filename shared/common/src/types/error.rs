@@ -2,19 +2,21 @@
 pub enum Error {
     #[error("invalid id")]
     InvalidId,
-
     #[error("invalid phone number: must be in E.164 country code format (e.g., +254712345678)")]
     InvalidPhone,
-
     #[error("invalid datetime format")]
     InvalidDateTime,
-
     #[cfg(feature = "dynamodb")]
     #[error("invalid dynamodb attribute type")]
     InvalidAttributeValue,
-
     #[error("invalid user status")]
     InvalidUserStatus,
+    #[error("invalid token")]
+    InvalidToken,
+    #[error("unauthorized")]
+    UnAuthorized,
+    #[error("forbidden")]
+    Forbidden,
 }
 
 impl From<bson::oid::Error> for Error {

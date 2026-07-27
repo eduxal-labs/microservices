@@ -53,6 +53,8 @@ This file serves as the single source of truth for AI agents working in this rep
   - When checking code compilation and running unit tests, the agent must run:
     - `cargo check -p common -F test` (to ensure clean compilation across all features).
     - `cargo test -p common -F test` (or `cargo test --all-features`) so that all feature-gated unit tests run and pass.
+- **Modular Directory Organization**: Group complex domain modules (such as `token`) into sub-directories (`types/token/`) with focused, single-responsibility files (`access.rs`, `refresh.rs`, `setup.rs`, `traits.rs`, `raw.rs`, `token.rs`, `tests.rs`).
+- **Typestate Token & Embedded Serde Validation**: Implement typestate tokens (`Token<T>`) where `T` defines claims and `TokenType` trait defines `KIND` and default `TTL`. Perform automatic token type validation and expiration checks directly within Serde `Deserialize` and PASETO decoding (`encode_paseto`/`decode_paseto`).
 
 ### Error Handling & Types
 - **Unified Error Enum**: Prefer a centralized `Error` enum in `types::error` (`shared/common/src/types/error.rs`) over micro-enums per struct.

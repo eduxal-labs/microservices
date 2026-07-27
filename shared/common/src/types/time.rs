@@ -2,7 +2,7 @@ use super::Error;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::ops::Deref;
+use std::ops::{Add, Deref};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -34,6 +34,17 @@ impl DateTime {
 
     pub fn inner(&self) -> chrono::DateTime<Utc> {
         self.0
+    }
+}
+
+impl<T> Add<T> for DateTime
+where
+    chrono::DateTime<Utc>: Add<T, Output = chrono::DateTime<Utc>>,
+{
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        Self(self.0 + rhs)
     }
 }
 
@@ -81,7 +92,9 @@ mod diesel_impl {
     }
 
     impl FromSql<Text, Sqlite> for DateTime {
-        fn from_sql(bytes: <Sqlite as ::diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        fn from_sql(
+            bytes: <Sqlite as ::diesel::backend::Backend>::RawValue<'_>,
+        ) -> deserialize::Result<Self> {
             let s = <String as FromSql<Text, Sqlite>>::from_sql(bytes)?;
             DateTime::parse_from_rfc3339(&s).map_err(|e| e.into())
         }
@@ -153,8 +166,8 @@ mod tests {
     #[test]
     fn test_sqlite_datetime_conversion() {
         use ::diesel::prelude::*;
-        use ::diesel::sqlite::SqliteConnection;
         use ::diesel::sql_types::Text;
+        use ::diesel::sqlite::SqliteConnection;
         use ::diesel::QueryableByName;
 
         let mut conn = SqliteConnection::establish(":memory:").unwrap();
