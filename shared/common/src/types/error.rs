@@ -11,6 +11,8 @@ pub enum Error {
     InvalidAttributeValue,
     #[error("invalid user status")]
     InvalidUserStatus,
+    #[error("invalid session status")]
+    InvalidSessionStatus,
     #[error("invalid token")]
     InvalidToken,
     #[error("unauthorized")]
