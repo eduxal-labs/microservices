@@ -3,6 +3,7 @@ mod id;
 mod phone;
 mod session;
 mod time;
+#[cfg(feature = "token")]
 mod token;
 mod user;
 mod verification;
@@ -12,6 +13,7 @@ pub use id::Id;
 pub use phone::Phone;
 pub use session::{Session, SessionStatus};
 pub use time::DateTime;
-pub use token::{Access, Refresh, Setup, Token, TokenType};
+#[cfg(feature = "token")]
+pub use token::*;
 pub use user::{Status, User};
 pub use verification::Verification;

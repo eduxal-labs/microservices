@@ -1,6 +1,7 @@
 use crate::types::{
     token::{
         access::Access,
+        bundle::Bundle,
         refresh::Refresh,
         token::Token,
     },
@@ -66,28 +67,52 @@ fn test_serde_deserialization_type_mismatch() {
 
 #[test]
 fn test_paseto_encode_decode_and_type_mismatch_error() {
-    let secret_key = [9u8; 32];
     let session_id = Id::new();
     let user_id = Id::new();
 
     let refresh_token = Token::refresh(session_id, user_id);
-    let paseto_str = refresh_token.encode_paseto(&secret_key).unwrap();
+    let paseto_str = refresh_token.encode_paseto().unwrap();
 
-    // Decode correctly as Token<Refresh>
-    let decoded_refresh: Token<Refresh> =
-        Token::decode_paseto(&paseto_str, &secret_key).unwrap();
+    // Decode correctly as Token<Refresh> without passing key
+    let decoded_refresh: Token<Refresh> = Token::decode_paseto(&paseto_str).unwrap();
     assert_eq!(refresh_token, decoded_refresh);
 
     // Decoding Token<Refresh> PASETO as Token<Access> must return Error::InvalidToken
-    let access_result: Result<Token<Access>, Error> =
-        Token::decode_paseto(&paseto_str, &secret_key);
+    let access_result: Result<Token<Access>, Error> = Token::decode_paseto(&paseto_str);
     assert_eq!(access_result, Err(Error::InvalidToken));
+}
 
-    // Decoding with wrong key must return Error::InvalidToken
-    let wrong_key = [1u8; 32];
-    let wrong_key_result: Result<Token<Refresh>, Error> =
-        Token::decode_paseto(&paseto_str, &wrong_key);
-    assert_eq!(wrong_key_result, Err(Error::InvalidToken));
+#[test]
+fn test_tokenize_and_direct_string_deserialization() {
+    let session_id = Id::new();
+    let user_id = Id::new();
+
+    let access_token = Token::access(session_id.clone(), user_id.clone());
+    let token_str = access_token.tokenize().unwrap();
+
+    // Deserializing a JSON string containing the PASETO string directly into Token<Access>
+    let json_quoted = format!("\"{}\"", token_str);
+    let deserialized: Token<Access> = serde_json::from_str(&json_quoted).unwrap();
+    assert_eq!(access_token, deserialized);
+}
+
+#[test]
+fn test_bundle_serialization_and_deserialization() {
+    let session_id = Id::new();
+    let user_id = Id::new();
+
+    let access_token = Token::access(session_id.clone(), user_id.clone());
+    let refresh_token = Token::refresh(session_id.clone(), user_id.clone());
+    let bundle = Bundle::new(access_token.clone(), refresh_token.clone());
+
+    // Serialize bundle to JSON
+    let bundle_json = serde_json::to_string(&bundle).unwrap();
+    assert!(bundle_json.contains("\"access\":\"v4.local."));
+    assert!(bundle_json.contains("\"refresh\":\"v4.local."));
+
+    // Deserialize bundle back from JSON
+    let deserialized_bundle: Bundle = serde_json::from_str(&bundle_json).unwrap();
+    assert_eq!(bundle, deserialized_bundle);
 }
 
 #[test]
@@ -112,7 +137,6 @@ fn test_serde_deserialization_expired_token() {
 
 #[test]
 fn test_paseto_expired_token_returns_invalid_token_error() {
-    let secret_key = [5u8; 32];
     let session_id = Id::new();
     let user_id = Id::new();
     let past_expires = DateTime::from_timestamp(1000000, 0).unwrap();
@@ -124,10 +148,9 @@ fn test_paseto_expired_token_returns_invalid_token_error() {
         },
         expires: past_expires,
     };
-    let paseto_str = expired_token.encode_paseto(&secret_key).unwrap();
+    let paseto_str = expired_token.encode_paseto().unwrap();
 
     // Decoding an expired PASETO token must return Err(Error::InvalidToken)
-    let decode_result: Result<Token<Access>, Error> =
-        Token::decode_paseto(&paseto_str, &secret_key);
+    let decode_result: Result<Token<Access>, Error> = Token::decode_paseto(&paseto_str);
     assert_eq!(decode_result, Err(Error::InvalidToken));
 }

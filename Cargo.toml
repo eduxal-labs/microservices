@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "services/authentication",
     "shared/common",
+    "shared/macros",
 ]
 
 [workspace.package]

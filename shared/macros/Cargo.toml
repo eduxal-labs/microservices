@@ -1,0 +1,13 @@
+[package]
+name = "macros"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+argon2 = { version = "0.5.3", features = ["password-hash", "rand", "std"] }
+quote = "1.0.43"
+syn = { version = "2.0.114", features = ["full"] }
