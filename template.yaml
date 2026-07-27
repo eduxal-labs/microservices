@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  eduxal
+  Multi-service AWS SAM application for Eduxal with ARM architecture, HTTP API Gateway, DynamoDB tables, and SQS Messenger Queue.
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 128
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        RUST_LOG: info
+
+Resources:
+  # ============================================================================
+  # HTTP API Gateway
+  # ============================================================================
+  EduxalHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: eduxal-http-api
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - "*"
+
+  # ============================================================================
+  # SQS Queue
+  # ============================================================================
+  MessengerQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: eduxal-messenger-queue
+      VisibilityTimeout: 30
+
+  # ============================================================================
+  # DynamoDB Tables
+  # ============================================================================
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eduxal-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: phone
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: phone
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: PhoneIndex
+          KeySchema:
+            - AttributeName: phone
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  VerificationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eduxal-verifications
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: phone
+          AttributeType: S
+      KeySchema:
+        - AttributeName: phone
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ============================================================================
+  # Lambda Functions
+  # ============================================================================
+  AuthenticationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: eduxal-authentication
+      CodeUri: ./services/authentication
+      Handler: bootstrap
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+          VERIFICATIONS_TABLE_NAME: !Ref VerificationsTable
+          MESSENGER_QUEUE_URL: !Ref MessengerQueue
+      Events:
+        ApiAuth:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EduxalHttpApi
+            Path: /{proxy+}
+            Method: ANY
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VerificationsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MessengerQueue.QueueName
+    Metadata:
+      BuildMethod: cargo-lambda
+
+  MessengerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: eduxal-messenger
+      CodeUri: ./services/messenger
+      Handler: bootstrap
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          VERIFICATIONS_TABLE_NAME: !Ref VerificationsTable
+      Events:
+        MessengerQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MessengerQueue.Arn
+            BatchSize: 80
+            MaximumBatchingWindowInSeconds: 1
+            ScalingConfig:
+              MaximumConcurrency: 1
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VerificationsTable
+    Metadata:
+      BuildMethod: cargo-lambda
+
+Outputs:
+  HttpApiUrl:
+    Description: "HTTP API Gateway endpoint URL"
+    Value: !Sub "https://${EduxalHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UsersTableName:
+    Description: "Users DynamoDB Table Name"
+    Value: !Ref UsersTable
+  VerificationsTableName:
+    Description: "Verifications DynamoDB Table Name"
+    Value: !Ref VerificationsTable
+  MessengerQueueUrl:
+    Description: "Messenger SQS Queue URL"
+    Value: !Ref MessengerQueue
+  MessengerQueueArn:
+    Description: "Messenger SQS Queue ARN"
+    Value: !GetAtt MessengerQueue.Arn

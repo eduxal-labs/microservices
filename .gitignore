@@ -1,0 +1,13 @@
+# Rust build artifacts
+/target
+Cargo.lock
+
+# AWS SAM build artifacts
+/.aws-sam
+/samconfig.toml.bak
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
