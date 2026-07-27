@@ -14,6 +14,6 @@ dynamodb = ["dep:aws-sdk-dynamodb"]
 bson = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
-diesel = { version = "2.2", optional = true }
+diesel = { version = "2.2", optional = true, features = ["sqlite"] }
 aws-sdk-dynamodb = { version = "1.60", optional = true }
 thiserror = "2"

@@ -105,28 +105,20 @@ impl<'de> Deserialize<'de> for Id {
 #[cfg(feature = "diesel")]
 mod diesel {
     use super::*;
-    use ::diesel::backend::Backend;
     use ::diesel::deserialize::{self, FromSql};
     use ::diesel::serialize::{self, ToSql};
     use ::diesel::sql_types::Binary;
+    use ::diesel::sqlite::Sqlite;
 
-    impl<DB> ToSql<Binary, DB> for Id
-    where
-        DB: Backend,
-        [u8]: ToSql<Binary, DB>,
-    {
-        fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, DB>) -> serialize::Result {
-            <[u8] as ToSql<Binary, DB>>::to_sql(self.as_bytes_ref(), out)
+    impl ToSql<Binary, Sqlite> for Id {
+        fn to_sql<'b>(&'b self, out: &mut serialize::Output<'b, '_, Sqlite>) -> serialize::Result {
+            <[u8] as ToSql<Binary, Sqlite>>::to_sql(self.as_bytes_ref(), out)
         }
     }
 
-    impl<DB> FromSql<Binary, DB> for Id
-    where
-        DB: Backend,
-        Vec<u8>: FromSql<Binary, DB>,
-    {
-        fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
-            let raw_bytes = Vec::<u8>::from_sql(bytes)?;
+    impl FromSql<Binary, Sqlite> for Id {
+        fn from_sql(bytes: <Sqlite as ::diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+            let raw_bytes = <Vec<u8> as FromSql<Binary, Sqlite>>::from_sql(bytes)?;
             if raw_bytes.len() != 12 {
                 return Err("Invalid byte length for ObjectId, expected 12 bytes".into());
             }
