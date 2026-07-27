@@ -53,8 +53,11 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-lambda
-        run: pip install cargo-lambda
+      - name: Setup Zig (for cross-compilation)
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Setup Cargo Lambda
+        uses: cargo-lambda/cargo-lambda-action@v1
 
       - name: Setup AWS SAM CLI
         uses: aws-actions/setup-sam@v2
