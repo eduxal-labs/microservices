@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "services/authentication",
+    "services/messenger",
     "shared/common",
     "shared/macros",
 ]
