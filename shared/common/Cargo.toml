@@ -17,3 +17,4 @@ serde_json = { workspace = true }
 diesel = { version = "2.2", optional = true, features = ["sqlite"] }
 aws-sdk-dynamodb = { version = "1.60", optional = true }
 thiserror = "2"
+chrono = { version = "0.4.45", features = ["serde"] }
