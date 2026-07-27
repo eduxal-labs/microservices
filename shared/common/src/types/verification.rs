@@ -80,4 +80,28 @@ mod tests {
         let deserialized: Verification = serde_json::from_str(&json).unwrap();
         assert_eq!(verification, deserialized);
     }
+
+    #[cfg(feature = "dynamodb")]
+    #[test]
+    fn test_dynamodb_verification_conversion() {
+        use aws_sdk_dynamodb::types::AttributeValue;
+        use std::collections::HashMap;
+
+        let now = DateTime::now();
+        let ttl = DateTime::from_timestamp(now.timestamp() + 300, 0).unwrap();
+        let verification = Verification::new(
+            Phone::new("+254712345678").unwrap(),
+            "123456",
+            now,
+            ttl,
+        );
+
+        let item: HashMap<String, AttributeValue> = (&verification).into();
+        let parsed = Verification::try_from(&item).unwrap();
+
+        assert_eq!(verification.phone, parsed.phone);
+        assert_eq!(verification.code, parsed.code);
+        assert_eq!(verification.created.timestamp(), parsed.created.timestamp());
+        assert_eq!(verification.ttl.timestamp(), parsed.ttl.timestamp());
+    }
 }

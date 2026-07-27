@@ -149,4 +149,45 @@ mod tests {
         let deserialized: User = serde_json::from_str(&json).unwrap();
         assert_eq!(user, deserialized);
     }
+
+    #[cfg(feature = "diesel")]
+    #[test]
+    fn test_sqlite_status_conversion() {
+        use ::diesel::prelude::*;
+        use ::diesel::sqlite::SqliteConnection;
+        use ::diesel::sql_types::Text;
+        use ::diesel::QueryableByName;
+
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        let status = Status::Active;
+
+        #[derive(QueryableByName, Debug, PartialEq, Eq)]
+        struct Row {
+            #[diesel(sql_type = Text)]
+            val: Status,
+        }
+
+        let result = ::diesel::sql_query("SELECT ? as val")
+            .bind::<Text, _>(&status)
+            .get_result::<Row>(&mut conn)
+            .unwrap();
+
+        assert_eq!(result.val, status);
+    }
+
+    #[cfg(feature = "dynamodb")]
+    #[test]
+    fn test_dynamodb_status_conversion() {
+        use aws_sdk_dynamodb::types::AttributeValue;
+
+        let status = Status::Active;
+        let attr: AttributeValue = (&status).into();
+        assert_eq!(attr.as_s().unwrap(), "Active");
+
+        let parsed = Status::try_from(&attr).unwrap();
+        assert_eq!(status, parsed);
+
+        let invalid_attr = AttributeValue::S("InvalidStatus".to_string());
+        assert!(Status::try_from(&invalid_attr).is_err());
+    }
 }

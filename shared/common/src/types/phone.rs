@@ -155,6 +155,31 @@ mod tests {
         assert!(serde_json::from_str::<Phone>(invalid_json).is_err());
     }
 
+    #[cfg(feature = "diesel")]
+    #[test]
+    fn test_sqlite_phone_conversion() {
+        use ::diesel::prelude::*;
+        use ::diesel::sqlite::SqliteConnection;
+        use ::diesel::sql_types::Text;
+        use ::diesel::QueryableByName;
+
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        let phone = Phone::new("+254712345678").unwrap();
+
+        #[derive(QueryableByName, Debug, PartialEq, Eq)]
+        struct Row {
+            #[diesel(sql_type = Text)]
+            val: Phone,
+        }
+
+        let result = ::diesel::sql_query("SELECT ? as val")
+            .bind::<Text, _>(&phone)
+            .get_result::<Row>(&mut conn)
+            .unwrap();
+
+        assert_eq!(result.val, phone);
+    }
+
     #[cfg(feature = "dynamodb")]
     #[test]
     fn test_dynamodb_conversion() {
@@ -166,5 +191,11 @@ mod tests {
 
         let parsed = Phone::try_from(&attr).unwrap();
         assert_eq!(parsed, phone);
+
+        let invalid_phone_attr = AttributeValue::S("0712345678".to_string());
+        assert!(Phone::try_from(&invalid_phone_attr).is_err());
+
+        let invalid_type_attr = AttributeValue::N("123".to_string());
+        assert!(Phone::try_from(&invalid_type_attr).is_err());
     }
 }

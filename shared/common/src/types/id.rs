@@ -103,7 +103,7 @@ impl<'de> Deserialize<'de> for Id {
 }
 
 #[cfg(feature = "diesel")]
-mod diesel {
+mod diesel_impl {
     use super::*;
     use ::diesel::deserialize::{self, FromSql};
     use ::diesel::serialize::{self, ToSql};
@@ -191,6 +191,31 @@ mod tests {
         assert_eq!(id, deserialized);
     }
 
+    #[cfg(feature = "diesel")]
+    #[test]
+    fn test_sqlite_id_conversion() {
+        use ::diesel::prelude::*;
+        use ::diesel::sqlite::SqliteConnection;
+        use ::diesel::sql_types::Binary;
+        use ::diesel::QueryableByName;
+
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        let id = Id::new();
+
+        #[derive(QueryableByName, Debug, PartialEq, Eq)]
+        struct Row {
+            #[diesel(sql_type = Binary)]
+            val: Id,
+        }
+
+        let result = ::diesel::sql_query("SELECT ? as val")
+            .bind::<Binary, _>(&id)
+            .get_result::<Row>(&mut conn)
+            .unwrap();
+
+        assert_eq!(result.val, id);
+    }
+
     #[cfg(feature = "dynamodb")]
     #[test]
     fn test_dynamodb_attribute_value_conversion() {
@@ -203,5 +228,8 @@ mod tests {
 
         let converted_id = Id::try_from(&av).expect("Should convert AttributeValue::S to Id");
         assert_eq!(id, converted_id);
+
+        let invalid_attr = AttributeValue::N("123".to_string());
+        assert!(Id::try_from(&invalid_attr).is_err());
     }
 }

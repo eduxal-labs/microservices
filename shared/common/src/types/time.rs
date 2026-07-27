@@ -149,14 +149,46 @@ mod tests {
         assert_eq!(now.timestamp(), deserialized.timestamp());
     }
 
+    #[cfg(feature = "diesel")]
+    #[test]
+    fn test_sqlite_datetime_conversion() {
+        use ::diesel::prelude::*;
+        use ::diesel::sqlite::SqliteConnection;
+        use ::diesel::sql_types::Text;
+        use ::diesel::QueryableByName;
+
+        let mut conn = SqliteConnection::establish(":memory:").unwrap();
+        let now = DateTime::now();
+
+        #[derive(QueryableByName, Debug, PartialEq, Eq)]
+        struct Row {
+            #[diesel(sql_type = Text)]
+            val: DateTime,
+        }
+
+        let result = ::diesel::sql_query("SELECT ? as val")
+            .bind::<Text, _>(&now)
+            .get_result::<Row>(&mut conn)
+            .unwrap();
+
+        assert_eq!(now.timestamp(), result.val.timestamp());
+    }
+
     #[cfg(feature = "dynamodb")]
     #[test]
     fn test_dynamodb_conversion() {
         use aws_sdk_dynamodb::types::AttributeValue;
 
         let dt = DateTime::now();
-        let attr: AttributeValue = (&dt).into();
-        let parsed = DateTime::try_from(&attr).unwrap();
-        assert_eq!(dt.timestamp(), parsed.timestamp());
+        let attr_s: AttributeValue = (&dt).into();
+        let parsed_s = DateTime::try_from(&attr_s).unwrap();
+        assert_eq!(dt.timestamp(), parsed_s.timestamp());
+
+        let attr_n = AttributeValue::N(dt.timestamp().to_string());
+        let parsed_n = DateTime::try_from(&attr_n).unwrap();
+        assert_eq!(dt.timestamp(), parsed_n.timestamp());
+
+        let invalid_attr = AttributeValue::S("not-a-date".to_string());
+        assert!(DateTime::try_from(&invalid_attr).is_err());
     }
 }
