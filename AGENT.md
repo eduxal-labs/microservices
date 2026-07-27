@@ -48,6 +48,7 @@ This file serves as the single source of truth for AI agents working in this rep
 - **Concrete Database Backends**: Target specific database backends (e.g., `diesel::sqlite::Sqlite` for Diesel) explicitly rather than using generic `DB: Backend` bounds in `ToSql`/`FromSql` trait implementations.
 - **Zero-Copy Byte References**: Provide helper methods like `as_bytes_ref(&self) -> &[u8; 12]` on newtype wrappers (e.g., `Id`) to return zero-copy byte slice references with correct lifetime bounds (`'b`).
 - **Explicit Feature Dependencies**: When utilizing database-specific capabilities, enable the required crate features explicitly in `Cargo.toml` (e.g., `diesel = { version = "...", optional = true, features = ["sqlite"] }`).
+- **Test Feature Aggregator**: Define a `test` feature flag in `Cargo.toml` (e.g., `test = ["diesel", "dynamodb"]`) that enables all optional crate features together, allowing validation via `cargo check -p <crate> -F test`.
 
 ### Error Handling & Types
 - **Unified Error Enum**: Prefer a centralized `Error` enum in `types::error` (`shared/common/src/types/error.rs`) over micro-enums per struct.
