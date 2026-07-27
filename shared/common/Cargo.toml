@@ -1,0 +1,18 @@
+[package]
+name = "common"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+diesel = ["dep:diesel"]
+dynamodb = ["dep:aws-sdk-dynamodb"]
+
+[dependencies]
+bson = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+diesel = { version = "2.2", optional = true }
+aws-sdk-dynamodb = { version = "1.60", optional = true }
+thiserror = "2"
