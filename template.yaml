@@ -97,7 +97,7 @@ Resources:
         - AttributeName: id
           KeyType: RANGE
       TimeToLiveSpecification:
-        AttributeName: expires
+        AttributeName: ttl
         Enabled: true
 
   # ============================================================================
