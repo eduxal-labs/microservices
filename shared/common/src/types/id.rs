@@ -1,10 +1,11 @@
+use super::Error;
 use bson::oid::ObjectId;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Id(pub ObjectId);
+pub struct Id(ObjectId);
 
 impl Id {
     pub fn new() -> Self {
@@ -47,10 +48,10 @@ impl fmt::Debug for Id {
 }
 
 impl FromStr for Id {
-    type Err = bson::oid::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ObjectId::parse_str(s).map(Id)
+        Ok(ObjectId::parse_str(s).map(Id)?)
     }
 }
 
@@ -86,7 +87,7 @@ impl<'de> Deserialize<'de> for Id {
             type Value = Id;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a 24-character hex string representing an ObjectId")
+                formatter.write_str("a 24-character hex string representing an Id")
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Id, E>
@@ -104,10 +105,10 @@ impl<'de> Deserialize<'de> for Id {
 #[cfg(feature = "diesel")]
 mod diesel_impl {
     use super::*;
-    use diesel::backend::Backend;
-    use diesel::deserialize::{self, FromSql};
-    use diesel::serialize::{self, ToSql};
-    use diesel::sql_types::Binary;
+    use ::diesel::backend::Backend;
+    use ::diesel::deserialize::{self, FromSql};
+    use ::diesel::serialize::{self, ToSql};
+    use ::diesel::sql_types::Binary;
 
     impl<DB> ToSql<Binary, DB> for Id
     where
@@ -137,7 +138,7 @@ mod diesel_impl {
 }
 
 #[cfg(feature = "dynamodb")]
-pub mod dynamodb_impl {
+pub mod dynamodb {
     use super::*;
     use aws_sdk_dynamodb::types::AttributeValue;
 
@@ -146,7 +147,7 @@ pub mod dynamodb_impl {
         #[error("Invalid AttributeValue type, expected String AttributeValue::S")]
         InvalidAttributeType,
         #[error("Invalid ObjectId string format: {0}")]
-        InvalidFormat(#[from] bson::oid::Error),
+        InvalidFormat(#[from] super::Error),
     }
 
     impl From<Id> for AttributeValue {
