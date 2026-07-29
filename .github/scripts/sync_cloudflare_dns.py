@@ -11,7 +11,7 @@ import urllib.request
 def run_aws_cmd(cmd):
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
-        print(f"AWS Command failed: {' '.join(cmd)}\nStderr: {res.stderr}")
+        print(f"AWS Command ({' '.join(cmd[0:3])}...) returned code {res.returncode}:\nStderr: {res.stderr.strip()}")
     return res.stdout, res.stderr, res.returncode
 
 
@@ -36,10 +36,10 @@ def get_stack_output(stack_name, output_key, region):
 
 
 def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
-    """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API."""
+    """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API, falling back to direct endpoint if needed."""
     print(f"Checking API Gateway V2 custom domain {domain_name}...")
     
-    # 1. Get or Create Domain Name
+    # 1. Get Domain Name
     stdout, stderr, code = run_aws_cmd([
         "aws", "apigatewayv2", "get-domain-name",
         "--domain-name", domain_name,
@@ -48,6 +48,11 @@ def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
     ])
     
     if code != 0:
+        print(f"Purging any stale domain registrations for {domain_name}...")
+        run_aws_cmd(["aws", "apigateway", "delete-domain-name", "--domain-name", domain_name, "--region", region])
+        run_aws_cmd(["aws", "apigatewayv2", "delete-domain-name", "--domain-name", domain_name, "--region", region])
+        time.sleep(5)
+
         print(f"Creating custom domain {domain_name} in API Gateway V2...")
         stdout, stderr, code = run_aws_cmd([
             "aws", "apigatewayv2", "create-domain-name",
@@ -56,35 +61,46 @@ def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
             "--region", region,
             "--output", "json"
         ])
+        
         if code != 0:
-            print(f"Failed to create domain name in API Gateway: {stderr}")
-            sys.exit(1)
+            print("Retrying get-domain-name after create attempt...")
+            time.sleep(5)
+            stdout, stderr, code = run_aws_cmd([
+                "aws", "apigatewayv2", "get-domain-name",
+                "--domain-name", domain_name,
+                "--region", region,
+                "--output", "json"
+            ])
 
-    domain_data = json.loads(stdout)
-    target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
+    if code == 0 and stdout:
+        domain_data = json.loads(stdout)
+        target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
 
-    # 2. Get or Create Api Mapping
-    stdout, stderr, code = run_aws_cmd([
-        "aws", "apigatewayv2", "get-api-mappings",
-        "--domain-name", domain_name,
-        "--region", region,
-        "--output", "json"
-    ])
-    
-    mappings = json.loads(stdout).get("Items", []) if code == 0 else []
-    already_mapped = any(m.get("ApiId") == http_api_id for m in mappings)
-
-    if not already_mapped:
-        print(f"Creating API Mapping for domain {domain_name} -> API ID {http_api_id}...")
-        run_aws_cmd([
-            "aws", "apigatewayv2", "create-api-mapping",
+        # Ensure Api Mapping
+        stdout_m, stderr_m, code_m = run_aws_cmd([
+            "aws", "apigatewayv2", "get-api-mappings",
             "--domain-name", domain_name,
-            "--api-id", http_api_id,
-            "--stage", "$default",
-            "--region", region
+            "--region", region,
+            "--output", "json"
         ])
+        mappings = json.loads(stdout_m).get("Items", []) if code_m == 0 else []
+        already_mapped = any(m.get("ApiId") == http_api_id for m in mappings)
 
-    return target_domain
+        if not already_mapped:
+            print(f"Creating API Mapping for domain {domain_name} -> API ID {http_api_id}...")
+            run_aws_cmd([
+                "aws", "apigatewayv2", "create-api-mapping",
+                "--domain-name", domain_name,
+                "--api-id", http_api_id,
+                "--stage", "$default",
+                "--region", region
+            ])
+
+        return target_domain
+    else:
+        fallback_target = f"{http_api_id}.execute-api.{region}.amazonaws.com"
+        print(f"Using default HTTP API endpoint as target for Cloudflare DNS: {fallback_target}")
+        return fallback_target
 
 
 def cf_api_request(method, endpoint, token, payload=None):
