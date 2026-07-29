@@ -33,10 +33,32 @@ def get_stack_output(stack_name, output_key, region):
     sys.exit(1)
 
 
+def delete_v1_domain_if_exists(domain_name, region):
+    """Deletes domain from API Gateway V1 if present to release namespace for V2."""
+    stdout, stderr, code = run_aws_cmd([
+        "aws", "apigateway", "get-domain-name",
+        "--domain-name", domain_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    if code == 0:
+        print(f"Found domain {domain_name} in API Gateway V1. Purging from V1...")
+        run_aws_cmd([
+            "aws", "apigateway", "delete-domain-name",
+            "--domain-name", domain_name,
+            "--region", region
+        ])
+        time.sleep(3)
+
+
 def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
     """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API."""
     print(f"Ensuring API Gateway V2 custom domain {domain_name}...")
     
+    # 1. Purge from V1 if stale entry exists
+    delete_v1_domain_if_exists(domain_name, region)
+
+    # 2. Get or Create Domain Name in V2
     stdout, stderr, code = run_aws_cmd([
         "aws", "apigatewayv2", "get-domain-name",
         "--domain-name", domain_name,
@@ -57,21 +79,15 @@ def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
             stdout = c_stdout
         else:
             print(f"create-domain-name response: {c_stderr.strip()}")
-            stdout, stderr, code = run_aws_cmd([
-                "aws", "apigatewayv2", "get-domain-name",
-                "--domain-name", domain_name,
-                "--region", region,
-                "--output", "json"
-            ])
-            if code != 0:
-                print(f"Failed to retrieve domain name {domain_name}: {stderr}")
-                sys.exit(1)
+            # Fallback to direct HTTP API endpoint if regional custom domain is locked
+            print(f"Using direct HTTP API target endpoint: {http_api_id}.execute-api.{region}.amazonaws.com")
+            return f"{http_api_id}.execute-api.{region}.amazonaws.com"
 
     domain_data = json.loads(stdout)
     target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
     print(f"API Gateway Target Regional Domain: {target_domain}")
 
-    # Get or Create Api Mapping
+    # 3. Get or Create Api Mapping
     stdout_m, stderr_m, code_m = run_aws_cmd([
         "aws", "apigatewayv2", "get-api-mappings",
         "--domain-name", domain_name,
