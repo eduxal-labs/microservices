@@ -78,6 +78,12 @@ jobs:
 
       - name: SAM Deploy
         run: |
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name eduxal-microservices --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack is in ROLLBACK_COMPLETE state. Deleting failed stack before re-deploying..."
+            aws cloudformation delete-stack --stack-name eduxal-microservices
+            aws cloudformation wait stack-delete-complete --stack-name eduxal-microservices
+          fi
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
