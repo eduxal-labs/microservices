@@ -96,11 +96,15 @@ jobs:
             WAS_DELETED=true
           fi
 
-          if aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; then
-            echo "Deleting orphan API Gateway custom domain auth.eduxal.com..."
-            aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
+          echo "Purging auth.eduxal.com from API Gateway V1 and V2..."
+          aws apigateway delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
+          aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
+
+          while aws apigateway get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1 || aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; do
+            echo "Waiting for API Gateway domain auth.eduxal.com to release..."
+            sleep 5
             WAS_DELETED=true
-          fi
+          done
 
           if [ "$WAS_DELETED" = true ]; then
             echo "Waiting 60 seconds for API Gateway regional internal domain lock to fully decay..."
