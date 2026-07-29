@@ -37,7 +37,6 @@ def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
     """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API."""
     print(f"Ensuring API Gateway V2 custom domain {domain_name}...")
     
-    # 1. Get or Create Domain Name
     stdout, stderr, code = run_aws_cmd([
         "aws", "apigatewayv2", "get-domain-name",
         "--domain-name", domain_name,
@@ -47,22 +46,32 @@ def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
     
     if code != 0:
         print(f"Creating custom domain {domain_name} in API Gateway V2...")
-        stdout, stderr, code = run_aws_cmd([
+        c_stdout, c_stderr, c_code = run_aws_cmd([
             "aws", "apigatewayv2", "create-domain-name",
             "--domain-name", domain_name,
             "--domain-name-configurations", f"CertificateArn={cert_arn},EndpointType=REGIONAL,SecurityPolicy=TLS_1_2",
             "--region", region,
             "--output", "json"
         ])
-        if code != 0:
-            print(f"Failed to create V2 domain: {stderr}")
-            sys.exit(1)
+        if c_code == 0:
+            stdout = c_stdout
+        else:
+            print(f"create-domain-name response: {c_stderr.strip()}")
+            stdout, stderr, code = run_aws_cmd([
+                "aws", "apigatewayv2", "get-domain-name",
+                "--domain-name", domain_name,
+                "--region", region,
+                "--output", "json"
+            ])
+            if code != 0:
+                print(f"Failed to retrieve domain name {domain_name}: {stderr}")
+                sys.exit(1)
 
     domain_data = json.loads(stdout)
     target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
     print(f"API Gateway Target Regional Domain: {target_domain}")
 
-    # 2. Get or Create Api Mapping
+    # Get or Create Api Mapping
     stdout_m, stderr_m, code_m = run_aws_cmd([
         "aws", "apigatewayv2", "get-api-mappings",
         "--domain-name", domain_name,
