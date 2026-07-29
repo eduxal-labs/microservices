@@ -85,47 +85,27 @@ jobs:
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
         run: cargo lambda build --release --arm64
 
-      - name: Run AWS Diagnostics
-        run: python3 .github/scripts/diagnose_aws.py
-
       - name: SAM Deploy
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name eduxal-microservices --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
-          WAS_DELETED=false
           if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" = "ROLLBACK_FAILED" ]; then
             echo "Stack is in $STACK_STATUS state. Deleting failed stack before re-deploying..."
             aws cloudformation delete-stack --stack-name eduxal-microservices
             aws cloudformation wait stack-delete-complete --stack-name eduxal-microservices
-            WAS_DELETED=true
-          fi
-
-          echo "Purging auth.eduxal.com from API Gateway V1 and V2..."
-          aws apigateway delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
-          aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
-
-          while aws apigateway get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1 || aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; do
-            echo "Waiting for API Gateway domain auth.eduxal.com to release..."
-            sleep 5
-            WAS_DELETED=true
-          done
-
-          if [ "$WAS_DELETED" = true ]; then
-            echo "Waiting 60 seconds for API Gateway regional internal domain lock to fully decay..."
-            sleep 60
           fi
 
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --stack-name eduxal-microservices \
-            --parameter-overrides CertificateArn="${{ steps.acm.outputs.cert_arn }}" \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
 
-      - name: Sync Cloudflare DNS Automatically
+      - name: Sync Domain Mapping & Cloudflare DNS Automatically
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID || vars.CLOUDLARE_ZONE_ID || secrets.CLOUDFLARE_ZONE_ID }}
           DOMAIN_NAME: auth.eduxal.com
+          CERTIFICATE_ARN: ${{ steps.acm.outputs.cert_arn }}
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
         run: |
           python3 .github/scripts/sync_cloudflare_dns.py

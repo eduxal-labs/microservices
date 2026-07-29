@@ -8,26 +8,83 @@ import urllib.error
 import urllib.request
 
 
-def get_apigateway_domain_target(domain_name, region):
-    """Retrieves API Gateway regional target domain name using AWS CLI."""
-    cmd = [
-        "aws",
-        "apigatewayv2",
-        "get-domain-name",
-        "--domain-name",
-        domain_name,
-        "--region",
-        region,
-        "--output",
-        "json",
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    domain_data = json.loads(res.stdout)
-    configs = domain_data.get("DomainNameConfigurations", [])
-    if configs:
-        return configs[0].get("ApiGatewayDomainName")
-    print(f"Error: Target domain name not found for {domain_name}")
+def run_aws_cmd(cmd):
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"AWS Command failed: {' '.join(cmd)}\nStderr: {res.stderr}")
+    return res.stdout, res.stderr, res.returncode
+
+
+def get_stack_output(stack_name, output_key, region):
+    stdout, stderr, code = run_aws_cmd([
+        "aws", "cloudformation", "describe-stacks",
+        "--stack-name", stack_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    if code != 0:
+        print(f"Error describing stack {stack_name}: {stderr}")
+        sys.exit(1)
+    
+    data = json.loads(stdout)
+    outputs = data.get("Stacks", [])[0].get("Outputs", [])
+    for out in outputs:
+        if out.get("OutputKey") == output_key:
+            return out.get("OutputValue")
+    print(f"Error: Stack output key {output_key} not found")
     sys.exit(1)
+
+
+def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
+    """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API."""
+    print(f"Checking API Gateway V2 custom domain {domain_name}...")
+    
+    # 1. Get or Create Domain Name
+    stdout, stderr, code = run_aws_cmd([
+        "aws", "apigatewayv2", "get-domain-name",
+        "--domain-name", domain_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    
+    if code != 0:
+        print(f"Creating custom domain {domain_name} in API Gateway V2...")
+        stdout, stderr, code = run_aws_cmd([
+            "aws", "apigatewayv2", "create-domain-name",
+            "--domain-name", domain_name,
+            "--domain-name-configurations", f"CertificateArn={cert_arn},EndpointType=REGIONAL,SecurityPolicy=TLS_1_2",
+            "--region", region,
+            "--output", "json"
+        ])
+        if code != 0:
+            print(f"Failed to create domain name in API Gateway: {stderr}")
+            sys.exit(1)
+
+    domain_data = json.loads(stdout)
+    target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
+
+    # 2. Get or Create Api Mapping
+    stdout, stderr, code = run_aws_cmd([
+        "aws", "apigatewayv2", "get-api-mappings",
+        "--domain-name", domain_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    
+    mappings = json.loads(stdout).get("Items", []) if code == 0 else []
+    already_mapped = any(m.get("ApiId") == http_api_id for m in mappings)
+
+    if not already_mapped:
+        print(f"Creating API Mapping for domain {domain_name} -> API ID {http_api_id}...")
+        run_aws_cmd([
+            "aws", "apigatewayv2", "create-api-mapping",
+            "--domain-name", domain_name,
+            "--api-id", http_api_id,
+            "--stage", "$default",
+            "--region", region
+        ])
+
+    return target_domain
 
 
 def cf_api_request(method, endpoint, token, payload=None):
@@ -45,11 +102,9 @@ def cf_api_request(method, endpoint, token, payload=None):
 
 
 def upsert_cloudflare_cname(zone_id, token, name, target, proxied=False):
-    # Remove trailing dot if present
     clean_name = name.rstrip(".")
     clean_target = target.rstrip(".")
 
-    # Check if record exists
     records = cf_api_request(
         "GET", f"zones/{zone_id}/dns_records?name={clean_name}&type=CNAME", token
     )
@@ -79,21 +134,27 @@ def main():
     zone_id = os.environ.get("CLOUDFLARE_ZONE_ID")
     domain_name = os.environ.get("DOMAIN_NAME", "auth.eduxal.com")
     region = os.environ.get("AWS_REGION", "us-east-1")
+    cert_arn = os.environ.get("CERTIFICATE_ARN")
+    stack_name = "eduxal-microservices"
 
     if not token or not zone_id:
-        print(
-            "Error: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID environment variables must be set"
-        )
+        print("Error: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID must be set")
         sys.exit(1)
 
-    print(f"=== Syncing Cloudflare DNS for {domain_name} ===")
+    print(f"=== Syncing Domain Mapping and Cloudflare DNS for {domain_name} ===")
 
-    # Retrieve API Gateway regional target domain and update Cloudflare CNAME
-    target_domain = get_apigateway_domain_target(domain_name, region)
-    print(f"API Gateway Target: {domain_name} -> {target_domain}")
+    # 1. Fetch HttpApiId from deployed CloudFormation stack
+    http_api_id = get_stack_output(stack_name, "HttpApiId", region)
+    print(f"Deployed HTTP API ID: {http_api_id}")
+
+    # 2. Ensure API Gateway V2 Custom Domain and Mapping
+    target_domain = ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region)
+    print(f"API Gateway Target Domain: {target_domain}")
+
+    # 3. Update Cloudflare DNS CNAME
     upsert_cloudflare_cname(zone_id, token, domain_name, target_domain, proxied=True)
 
-    print("=== Cloudflare DNS Sync Complete! ===")
+    print("=== Domain & Cloudflare DNS Sync Complete! ===")
 
 
 if __name__ == "__main__":
