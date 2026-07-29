@@ -70,6 +70,15 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      - name: Ensure ACM Certificate & Cloudflare Validation
+        id: acm
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          DOMAIN_NAME: auth.eduxal.com
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        run: python3 .github/scripts/ensure_acm_and_dns.py
+
       - name: Build Binaries with Cargo Lambda
         env:
           PASETO_PASSWORD: ${{ secrets.PASETO_PASSWORD }}
@@ -90,6 +99,7 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --stack-name eduxal-microservices \
+            --parameter-overrides CertificateArn="${{ steps.acm.outputs.cert_arn }}" \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
 
       - name: Sync Cloudflare DNS Automatically

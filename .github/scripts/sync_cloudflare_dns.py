@@ -8,59 +8,6 @@ import urllib.error
 import urllib.request
 
 
-def get_aws_acm_validation_record(domain_name, region):
-    """Retrieves ACM DNS validation CNAME Name and Value using AWS CLI."""
-    cmd = [
-        "aws",
-        "acm",
-        "list-certificates",
-        "--region",
-        region,
-        "--output",
-        "json",
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    certs = json.loads(res.stdout).get("CertificateSummaryList", [])
-
-    cert_arn = None
-    for cert in certs:
-        if cert.get("DomainName") == domain_name:
-            cert_arn = cert.get("CertificateArn")
-            break
-
-    if not cert_arn:
-        print(f"Error: No ACM certificate found for {domain_name}")
-        sys.exit(1)
-
-    # Describe certificate to get ResourceRecord
-    for _ in range(30):
-        cmd_desc = [
-            "aws",
-            "acm",
-            "describe-certificate",
-            "--certificate-arn",
-            cert_arn,
-            "--region",
-            region,
-            "--output",
-            "json",
-        ]
-        res_desc = subprocess.run(cmd_desc, capture_output=True, text=True, check=True)
-        cert_detail = json.loads(res_desc.stdout).get("Certificate", {})
-
-        domain_validations = cert_detail.get("DomainValidationOptions", [])
-        for opt in domain_validations:
-            if opt.get("DomainName") == domain_name and "ResourceRecord" in opt:
-                rec = opt["ResourceRecord"]
-                return rec["Name"], rec["Value"]
-
-        print("Waiting for ACM validation record to be generated...")
-        time.sleep(5)
-
-    print("Error: Timed out waiting for ACM validation record")
-    sys.exit(1)
-
-
 def get_apigateway_domain_target(domain_name, region):
     """Retrieves API Gateway regional target domain name using AWS CLI."""
     cmd = [
@@ -141,12 +88,7 @@ def main():
 
     print(f"=== Syncing Cloudflare DNS for {domain_name} ===")
 
-    # 1. ACM Validation Record
-    cname_name, cname_value = get_aws_acm_validation_record(domain_name, region)
-    print(f"ACM Validation CNAME: {cname_name} -> {cname_value}")
-    upsert_cloudflare_cname(zone_id, token, cname_name, cname_value, proxied=False)
-
-    # 2. Target Domain Record
+    # Retrieve API Gateway regional target domain and update Cloudflare CNAME
     target_domain = get_apigateway_domain_target(domain_name, region)
     print(f"API Gateway Target: {domain_name} -> {target_domain}")
     upsert_cloudflare_cname(zone_id, token, domain_name, target_domain, proxied=True)

@@ -9,6 +9,9 @@ Parameters:
     Type: String
     Default: auth.eduxal.com
     Description: Custom domain name for the HTTP API Gateway
+  CertificateArn:
+    Type: String
+    Description: Arn of the validated ACM Certificate
 
 Globals:
   Function:
@@ -22,15 +25,6 @@ Globals:
         RUST_LOG: info
 
 Resources:
-  # ============================================================================
-  # ACM Certificate for Custom Domain (auth.eduxal.com)
-  # ============================================================================
-  ApiCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Ref DomainName
-      ValidationMethod: DNS
-
   # ============================================================================
   # HTTP API Gateway
   # ============================================================================
@@ -47,7 +41,7 @@ Resources:
           - "*"
       Domain:
         DomainName: !Ref DomainName
-        CertificateArn: !Ref ApiCertificate
+        CertificateArn: !Ref CertificateArn
         EndpointConfiguration: REGIONAL
 
   # ============================================================================
