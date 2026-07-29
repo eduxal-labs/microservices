@@ -88,21 +88,19 @@ jobs:
       - name: SAM Deploy
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name eduxal-microservices --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
-          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
-            echo "Stack is in ROLLBACK_COMPLETE state. Deleting failed stack before re-deploying..."
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" = "ROLLBACK_FAILED" ]; then
+            echo "Stack is in $STACK_STATUS state. Deleting failed stack before re-deploying..."
             aws cloudformation delete-stack --stack-name eduxal-microservices
             aws cloudformation wait stack-delete-complete --stack-name eduxal-microservices
           fi
 
-          if aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; then
-            echo "Deleting orphan API Gateway custom domain auth.eduxal.com..."
-            aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
-            echo "Waiting for API Gateway custom domain deletion to finalize..."
-            while aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; do
-              sleep 5
-            done
-            echo "Custom domain deleted successfully."
-          fi
+          echo "Ensuring API Gateway custom domain auth.eduxal.com is completely purged..."
+          aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
+          while aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; do
+            echo "Waiting for API Gateway custom domain auth.eduxal.com to release..."
+            sleep 5
+          done
+          echo "API Gateway custom domain is completely clear."
 
           sam deploy \
             --no-confirm-changeset \
