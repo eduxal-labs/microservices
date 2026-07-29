@@ -88,19 +88,24 @@ jobs:
       - name: SAM Deploy
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name eduxal-microservices --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
+          WAS_DELETED=false
           if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$STACK_STATUS" = "ROLLBACK_FAILED" ]; then
             echo "Stack is in $STACK_STATUS state. Deleting failed stack before re-deploying..."
             aws cloudformation delete-stack --stack-name eduxal-microservices
             aws cloudformation wait stack-delete-complete --stack-name eduxal-microservices
+            WAS_DELETED=true
           fi
 
-          echo "Ensuring API Gateway custom domain auth.eduxal.com is completely purged..."
-          aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
-          while aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; do
-            echo "Waiting for API Gateway custom domain auth.eduxal.com to release..."
-            sleep 5
-          done
-          echo "API Gateway custom domain is completely clear."
+          if aws apigatewayv2 get-domain-name --domain-name auth.eduxal.com >/dev/null 2>&1; then
+            echo "Deleting orphan API Gateway custom domain auth.eduxal.com..."
+            aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
+            WAS_DELETED=true
+          fi
+
+          if [ "$WAS_DELETED" = true ]; then
+            echo "Waiting 60 seconds for API Gateway regional internal domain lock to fully decay..."
+            sleep 60
+          fi
 
           sam deploy \
             --no-confirm-changeset \
