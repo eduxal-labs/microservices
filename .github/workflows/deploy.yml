@@ -85,6 +85,9 @@ jobs:
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
         run: cargo lambda build --release --arm64
 
+      - name: Run AWS Diagnostics
+        run: python3 .github/scripts/diagnose_aws.py
+
       - name: SAM Deploy
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name eduxal-microservices --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NOT_FOUND")
