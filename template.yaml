@@ -149,7 +149,7 @@ Resources:
             BatchSize: 80
             MaximumBatchingWindowInSeconds: 1
             ScalingConfig:
-              MaximumConcurrency: 1
+              MaximumConcurrency: 2
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref VerificationsTable
