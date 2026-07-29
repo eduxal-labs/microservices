@@ -33,14 +33,56 @@ def get_stack_output(stack_name, output_key, region):
     sys.exit(1)
 
 
-def debug_domain_names(region):
-    print("=== Listing V1 Domain Names ===")
-    out_v1, err_v1, _ = run_aws_cmd(["aws", "apigateway", "get-domain-names", "--region", region])
-    print(f"V1: {out_v1}")
+def ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region):
+    """Ensures API Gateway V2 Custom Domain exists and is mapped to the HTTP API."""
+    print(f"Ensuring API Gateway V2 custom domain {domain_name}...")
+    
+    # 1. Get or Create Domain Name
+    stdout, stderr, code = run_aws_cmd([
+        "aws", "apigatewayv2", "get-domain-name",
+        "--domain-name", domain_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    
+    if code != 0:
+        print(f"Creating custom domain {domain_name} in API Gateway V2...")
+        stdout, stderr, code = run_aws_cmd([
+            "aws", "apigatewayv2", "create-domain-name",
+            "--domain-name", domain_name,
+            "--domain-name-configurations", f"CertificateArn={cert_arn},EndpointType=REGIONAL,SecurityPolicy=TLS_1_2",
+            "--region", region,
+            "--output", "json"
+        ])
+        if code != 0:
+            print(f"Failed to create V2 domain: {stderr}")
+            sys.exit(1)
 
-    print("=== Listing V2 Domain Names ===")
-    out_v2, err_v2, _ = run_aws_cmd(["aws", "apigatewayv2", "get-domain-names", "--region", region])
-    print(f"V2: {out_v2}")
+    domain_data = json.loads(stdout)
+    target_domain = domain_data["DomainNameConfigurations"][0]["ApiGatewayDomainName"]
+    print(f"API Gateway Target Regional Domain: {target_domain}")
+
+    # 2. Get or Create Api Mapping
+    stdout_m, stderr_m, code_m = run_aws_cmd([
+        "aws", "apigatewayv2", "get-api-mappings",
+        "--domain-name", domain_name,
+        "--region", region,
+        "--output", "json"
+    ])
+    mappings = json.loads(stdout_m).get("Items", []) if code_m == 0 else []
+    already_mapped = any(m.get("ApiId") == http_api_id for m in mappings)
+
+    if not already_mapped:
+        print(f"Creating API Mapping for domain {domain_name} -> API ID {http_api_id}...")
+        run_aws_cmd([
+            "aws", "apigatewayv2", "create-api-mapping",
+            "--domain-name", domain_name,
+            "--api-id", http_api_id,
+            "--stage", "$default",
+            "--region", region
+        ])
+
+    return target_domain
 
 
 def cf_api_request(method, endpoint, token, payload=None):
@@ -99,17 +141,15 @@ def main():
         sys.exit(1)
 
     print(f"=== Syncing Domain Mapping and Cloudflare DNS for {domain_name} ===")
-    
-    # Debug existing domain registrations
-    debug_domain_names(region)
 
-    # Fetch HttpApiId from deployed CloudFormation stack
+    # 1. Fetch HttpApiId from deployed CloudFormation stack
     http_api_id = get_stack_output(stack_name, "HttpApiId", region)
-    target_host = f"{http_api_id}.execute-api.{region}.amazonaws.com"
-    print(f"Target AWS HTTP API Domain: {target_host}")
 
-    # Update Cloudflare DNS CNAME record
-    upsert_cloudflare_cname(zone_id, token, domain_name, target_host)
+    # 2. Ensure API Gateway V2 Custom Domain and API Mapping
+    target_domain = ensure_apigateway_custom_domain(domain_name, cert_arn, http_api_id, region)
+
+    # 3. Update Cloudflare DNS CNAME record
+    upsert_cloudflare_cname(zone_id, token, domain_name, target_domain)
 
     print("=== Domain & Cloudflare DNS Sync Complete! ===")
 
