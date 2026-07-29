@@ -84,6 +84,8 @@ jobs:
             aws cloudformation delete-stack --stack-name eduxal-microservices
             aws cloudformation wait stack-delete-complete --stack-name eduxal-microservices
           fi
+          echo "Cleaning up any orphan API Gateway custom domain auth.eduxal.com if present..."
+          aws apigatewayv2 delete-domain-name --domain-name auth.eduxal.com 2>/dev/null || true
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
